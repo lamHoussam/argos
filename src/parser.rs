@@ -32,15 +32,27 @@ impl CodeParser {
         self.variables.insert(var_name.clone(), Variable::new(var_name, 16));        
     }
 
-    pub fn parse_code(&mut self, entity: Entity<'_>) {
+    pub fn parse_code(&mut self, entity: &Entity<'_>) {
         if entity.get_kind() == EntityKind::VarDecl {
-            println!("=> Var Entity: {:?}, Type: {:?}", entity, entity.get_type());
+            let tpe = entity.get_type().unwrap();
+            match tpe.get_kind() {
+                clang::TypeKind::ConstantArray => {
+                    
+                },
+                _ => {
+
+                }
+            }
+
+            println!("Entity: {:?}", tpe);
+            // println!("Type: {:?}, other: {:?}", tpe, tpe.get_kind());
+            // println!("=> Var Entity: {:?}, Type: {:?}", entity, entity.get_type());
             self.add_new_variable(entity.get_name().unwrap_or("Houssam".to_string()));
 
-            println!("-> Children: {:?}", entity.get_children());
+            // println!("-> Children: {:?}", entity.get_children());
         }
-
-        let children = entity.get_children();
+        
+        let children = &entity.get_children();
         if children.len() == 0 { return; }
 
         for e in children {
