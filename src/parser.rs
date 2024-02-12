@@ -28,8 +28,8 @@ impl CodeParser {
         }
     }
 
-    pub fn add_new_variable(&mut self, var_name: String) {
-        self.variables.insert(var_name.clone(), Variable::new(var_name, 16));        
+    pub fn add_new_variable(&mut self, var_name: String, size: usize) {
+        self.variables.insert(var_name.clone(), Variable::new(var_name, size));        
     }
 
     pub fn parse_code(&mut self, entity: &Entity<'_>) {
@@ -37,7 +37,17 @@ impl CodeParser {
             let tpe = entity.get_type().unwrap();
             match tpe.get_kind() {
                 clang::TypeKind::ConstantArray => {
-                    
+                    // TODO: Cleaup
+                    let display_name = tpe.get_display_name();
+                    let display_name_split: Vec<&str> = display_name.split('[').collect();
+                    let type_name = display_name_split.first().unwrap();
+                    let size_str = display_name_split.last().unwrap().trim_end_matches(']');
+                    let size = size_str.parse::<usize>().unwrap_or_default();
+
+                    // TODO: Multiply size by sizeof(type_name)
+                    println!("name: {:?}, size: {:?}", type_name, size);
+                    self.add_new_variable(entity.get_name()
+                        .unwrap_or("Variable".to_string()), size);
                 },
                 _ => {
 
@@ -47,7 +57,6 @@ impl CodeParser {
             println!("Entity: {:?}", tpe);
             // println!("Type: {:?}, other: {:?}", tpe, tpe.get_kind());
             // println!("=> Var Entity: {:?}, Type: {:?}", entity, entity.get_type());
-            self.add_new_variable(entity.get_name().unwrap_or("Houssam".to_string()));
 
             // println!("-> Children: {:?}", entity.get_children());
         }

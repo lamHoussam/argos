@@ -13,7 +13,7 @@ int main() {
     char *srce = "Houssam";
     char dest[5];
 
-    // strncpy(dest, srce, sizeof(char) * 4);
+    // strncpy(dest, srce, sizeof(char) * 5);
     strcpy(dest, srce);
     printf("%s\n", dest);    
 }
