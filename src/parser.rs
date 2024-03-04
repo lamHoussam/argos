@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, f32::consts::E};
 use clang::{Entity, EntityKind};
 
 #[derive(Debug)]
@@ -33,6 +33,10 @@ impl CodeParser {
     }
 
     pub fn parse_code(&mut self, entity: &Entity<'_>) {
+
+        // println!("Name: {:?}; Kind: {:?}", entity.get_name(), entity.get_kind());  
+        // println!("Ent: {:?}", entity);
+
         if entity.get_kind() == EntityKind::VarDecl {
             let tpe = entity.get_type().unwrap();
             match tpe.get_kind() {
@@ -49,6 +53,23 @@ impl CodeParser {
                     self.add_new_variable(entity.get_name()
                         .unwrap_or("Variable".to_string()), size);
                 },
+                clang::TypeKind::Pointer => {
+                    // Only for string literal initialisation or empty declaration
+                    let display_name = tpe.get_display_name();
+                    if let Some(child) = entity.get_child(0) {
+                        let value = child.get_child(0).unwrap().get_display_name().unwrap_or_default();
+                        let size = value.len() - 1; // Remove "" and add \0 in count
+                        println!("Found value: {}, size: {}", value, size);
+                        self.add_new_variable(entity.get_name()
+                            .unwrap_or("Variable".to_string()), size)
+                    } else {
+                        self.add_new_variable(entity.get_name()
+                            .unwrap_or("Variable".to_string()), 0)
+                    }
+
+                    // TODO: Multiply size by sizeof(type_name)
+                    println!("name: {:?}", display_name);
+                }
                 _ => {
 
                 }

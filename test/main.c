@@ -15,5 +15,5 @@ int main() {
 
     // strncpy(dest, srce, sizeof(char) * 5);
     strcpy(dest, srce);
-    printf("%s\n", dest);    
+    printf("%s\n", dest);
 }
