@@ -12,8 +12,10 @@ int main() {
     // First buffer overflow pattern
     char *srce = "Houssam";
     char dest[5];
+    char val[3];
 
     // strncpy(dest, srce, sizeof(char) * 5);
-    strcpy(dest, srce);
+    // strcat(dest, srce);
+    scanf(" %s %15s", dest, val);
     printf("%s\n", dest);
 }

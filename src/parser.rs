@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env::Args};
+use regex::Regex;
 use clang::{Entity, EntityKind};
 
 #[derive(Debug)]
@@ -42,6 +43,48 @@ impl CodeParser {
         let var_srce = self.variables.get(&srce.get_display_name().unwrap()).expect("Variable not declared");
 
         var_srce.size >= var_dest.size
+    }
+
+    fn parse_scanf(&self, args: &Vec<Entity<'_>>) -> bool {
+        let mut it = args[0];
+        let format: String;
+        loop {
+            if let Some(literal) = it.get_display_name() {
+                format = literal;
+                break;
+            } else { 
+                match it.get_child(0) {
+                    Some(iter) => it = iter,
+                    None => (),
+                }
+            }
+        }
+
+        println!("Format: {}", format);
+
+        let re = Regex::new(r"%(\d+)?s").unwrap();
+        let mut arg_iter = args.iter();
+        arg_iter.next();
+
+        for cap in re.captures_iter(&format) {
+            let buffer_size = match cap.get(1) {
+                Some(matched) => matched.as_str().parse::<usize>().unwrap_or(0),
+                None => 0,
+            };
+
+            println!("Found: {}, size: {}", &cap[0], buffer_size);
+            match arg_iter.next() {
+                Some(value) => {
+                    let var_name = value.get_display_name().unwrap();
+                    let var = self.variables.get(&var_name).expect("Variable not declared!");
+                    if var.size >= buffer_size { return true; }
+                    // println!("Goes with {}, size: {}", var_name, );
+                },
+                None => break,
+            }
+        }
+
+        false
     }
 
     pub fn parse_code(&mut self, entity: &Entity<'_>) {
@@ -102,7 +145,28 @@ impl CodeParser {
                     if let Some(args) = entity.get_arguments() {
                         let found_buff_overflow = self.parse_strcpy(&args);
                         if found_buff_overflow {
+                            println!("Detected buffer overflow pattern at line {:?}", entity.get_location().unwrap().get_file_location());
+                        } else {
+                            println!("WARNING: Use of unsafe function strcpy");
+                        }
+                    }
+                }
+                else if display_name == "strcat" {
+                    if let Some(args) = entity.get_arguments() {
+                        let found_buff_overflow = self.parse_strcpy(&args);
+                        if found_buff_overflow {
                             println!("Detected buffer overflow at line {:?}", entity.get_location().unwrap().get_file_location());
+                        } else {
+                            println!("WARNING: Use of unsafe function strcat");
+                        }
+                    }
+                } else if display_name == "scanf" {
+                    if let Some(args) = entity.get_arguments() {
+                        let found_buff_overflow = self.parse_scanf(&args);
+                        if found_buff_overflow {
+                            println!("Detected buffer overflow at line {:?}", entity.get_location().unwrap().get_file_location());
+                        } else {
+                            println!("WARNING: Use of unsafe function strcat");
                         }
                     }
                 }
