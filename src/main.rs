@@ -19,6 +19,5 @@ fn main() {
         }
     }
 
-
     println!("Variables: {:?}", parser);
 }

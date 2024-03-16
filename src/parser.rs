@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env::Args};
 use regex::Regex;
-use clang::{Entity, EntityKind};
+use clang::{Entity, EntityKind, EntityVisitResult};
 
 #[derive(Debug)]
 pub struct Variable {
@@ -24,6 +24,20 @@ impl Variable {
     }
 }
 
+fn get_litteral(entity: Entity<'_>) -> String {
+    let mut it = entity;
+
+    loop {
+        if let Some(litt) = it.get_display_name() { return litt; } 
+        else { 
+            match it.get_child(0) {
+                Some(iter) => it = iter,
+                None => (),
+            }
+        }
+    }
+}
+
 impl CodeParser {
     pub fn new() -> Self {
         CodeParser {
@@ -40,26 +54,24 @@ impl CodeParser {
         let srce = args[1];
 
         let var_dest = self.variables.get(&dest.get_display_name().unwrap()).expect("Variable not declared");
-        let var_srce = self.variables.get(&srce.get_display_name().unwrap()).expect("Variable not declared");
 
-        var_srce.size >= var_dest.size
+        match srce.get_display_name() {
+            Some(var_name) => {
+                let var_srce = self.variables.get(&var_name).expect("Variable not declared");
+                var_srce.size >= var_dest.size
+            },
+            None => {
+                let value = get_litteral(srce);
+                println!("Litteral: {}", value);
+                let size = value.len() - 2;
+                size >= var_dest.size
+            },
+        }
     }
 
     fn parse_scanf(&self, args: &Vec<Entity<'_>>) -> bool {
-        let mut it = args[0];
-        let format: String;
-        loop {
-            if let Some(literal) = it.get_display_name() {
-                format = literal;
-                break;
-            } else { 
-                match it.get_child(0) {
-                    Some(iter) => it = iter,
-                    None => (),
-                }
-            }
-        }
-
+        let it = args[0];
+        let format = get_litteral(it);
         println!("Format: {}", format);
 
         let re = Regex::new(r"%(\d+)?s").unwrap();

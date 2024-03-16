@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "vcruntime_string.h": "c",
+        "corecrt_memory.h": "c"
+    }
+}
