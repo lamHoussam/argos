@@ -1,12 +1,14 @@
 use std::{collections::HashMap, env::Args};
 use regex::Regex;
 use clang::{Entity, EntityKind, EntityVisitResult};
+use std::process;
 
 #[derive(Debug)]
 pub struct Variable {
     pub name: String,
     pub size: usize,
     pub var_type: String,
+    pub max_bounds_checked: usize,
 }
 
 #[derive(Debug)]
@@ -20,6 +22,7 @@ impl Variable {
             name: var_name,
             size: var_size,
             var_type: var_type,
+            max_bounds_checked: 100,
         }
     }
 }
@@ -185,6 +188,12 @@ impl CodeParser {
                 // println!("Function call: {}", display_name);
 
             }, 
+
+            // TODO: Check in if statements if variables bounds have been checked
+            EntityKind::IfStmt => {
+                let display_name = entity.get_display_name().unwrap();
+
+            },
             _ => {
                 
             }
