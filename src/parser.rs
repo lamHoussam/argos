@@ -1,8 +1,83 @@
-use std::{collections::HashMap, env::Args};
+use std::env;
+use std::collections::HashMap;
+use libc::{O_CREAT, O_EXCL};
 use regex::Regex;
-use clang::{Entity, EntityKind, EntityVisitResult};
-use std::process;
+use clang::{Entity, EntityKind};
+// use std::process;
+use std::sync::{Mutex, Arc};
+use lazy_static::lazy_static;
 
+extern crate libc;
+use std::ffi::CString;
+use std::ptr;
+
+lazy_static! {
+    #[no_mangle]
+    static ref CODEPARSER: Mutex<CodeParser> = Mutex::new(CodeParser::new()); 
+}
+
+lazy_static! {
+    #[no_mangle]
+    pub static ref MYVAR: Arc<Mutex<i32>> = Arc::new(Mutex::new(0)); 
+}
+
+pub struct SharedState {
+    pub value: Mutex<i32>
+}
+
+lazy_static! {
+    pub static ref SHARED_MEMORY: SharedState = {
+        let shmem_name = CString::new("/shmem_code_parser")
+            .expect("Failed");
+
+        let fd = unsafe {
+            libc::shm_open(shmem_name.as_ptr(), 
+                           O_CREAT | O_EXCL| libc::O_RDWR, 
+                           0o600)
+        };
+
+        if fd == -1 {
+            println!("Cant create shmem");    
+            return SharedState { value: Mutex::new(0) };
+        }
+
+
+        let res = unsafe {
+            libc::ftruncate(fd, 4096)
+        };
+        if res == -1 {
+            unsafe {
+                libc::close(fd);
+                libc::shm_unlink(shmem_name.as_ptr());
+            }
+
+            return SharedState { value: Mutex::new(0) };
+        }
+
+        println!("Created shmem: {:?}", fd);
+
+
+        SharedState {
+            value: Mutex::new(unsafe {
+               5 
+            }),
+        }
+
+    };
+
+}
+
+
+pub fn print_myvar() {
+
+    let mutguard = SHARED_MEMORY.value.lock().unwrap();
+    let value: i32= mutguard.clone();
+    std::mem::drop(mutguard);
+
+    println!("Rust called with {}", value);
+}
+
+// TODO: Replace var_type with sizeof_type
 #[derive(Debug)]
 pub struct Variable {
     pub name: String,
@@ -13,7 +88,7 @@ pub struct Variable {
 
 #[derive(Debug)]
 pub struct CodeParser {
-    variables: HashMap<String, Variable>,
+        variables: HashMap<String, Variable>,
 }
 
 impl Variable {
@@ -40,6 +115,11 @@ fn get_litteral(entity: Entity<'_>) -> String {
         }
     }
 }
+
+pub fn get_static_code_parser() -> &'static Mutex<CodeParser> {
+    &CODEPARSER
+}
+
 
 impl CodeParser {
     pub fn new() -> Self {
@@ -191,7 +271,7 @@ impl CodeParser {
 
             // TODO: Check in if statements if variables bounds have been checked
             EntityKind::IfStmt => {
-                let display_name = entity.get_display_name().unwrap();
+                let _display_name = entity.get_display_name().unwrap();
 
             },
             _ => {
