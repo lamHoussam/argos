@@ -1,80 +1,20 @@
-use core::panic;
-use std::{env, isize};
 use std::collections::HashMap;
-use std::error::Error;
-use libc::c_void;
-use regex::Regex;
 use clang::{Entity, EntityKind};
 // use std::process;
-use std::sync::{Mutex, Arc};
-use lazy_static::lazy_static;
 
-extern crate libc;
+// lazy_static! {
+//     #[no_mangle]
+//     static ref CODEPARSER: Mutex<CodeParser> = Mutex::new(CodeParser::new()); 
+// }
 
-use std::ptr;
 
-lazy_static! {
-    #[no_mangle]
-    static ref CODEPARSER: Mutex<CodeParser> = Mutex::new(CodeParser::new()); 
-}
-
-lazy_static! {
-    #[no_mangle]
-    pub static ref MYVAR: Arc<Mutex<i32>> = Arc::new(Mutex::new(0)); 
-}
-
-pub struct SharedState {
-    pub value: Mutex<i32>
-}
-
+// region Test
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct TestStruct {
     pub value: i32,
 }
-
-pub fn write_to_shared_memory(data: TestStruct) -> i32 {
-    let key = 69420;
-    let mem_size = std::mem::size_of::<TestStruct>() as libc::size_t;
-    let shm_id = unsafe { libc::shmget(key, mem_size, libc::IPC_CREAT | 0o666) };
-    println!("get shmem id {}", shm_id);
-    if shm_id < 0 {
-        panic!("Failed to write to shmem");
-    }
-    let ptr = unsafe { libc::shmat(shm_id, ptr::null() as *const libc::c_void, 0) as *mut TestStruct};
-    println!("attach shmem {:?}", ptr);
-    if (ptr as isize) == -1{
-        panic!("Failed to attach to shmem {}", std::io::Error::last_os_error());
-    }
-
-    unsafe {
-        ptr::write(ptr, data);
-        // ptr.copy_from_nonoverlapping(data, 1);
-        // *ptr = data;
-        println!("Write to shmem");
-        libc::shmdt(ptr as *const c_void);
-    }
-    shm_id
-}
-
-pub fn read_from_shmem(shm_id: i32) -> TestStruct {
-    let ptr = unsafe { libc::shmat(shm_id, ptr::null(), 0) } as *mut TestStruct;
-    if ptr.is_null() {
-        panic!("Failed to attach to shmem");
-    }
-    let data = unsafe { *ptr };
-    unsafe {
-        // shmat(shm_id, ptr as *mut libc::c_void, 0);
-        libc::shmdt(ptr as *const _ as *mut libc::c_void);
-        libc::shmctl(shm_id, libc::IPC_RMID, ptr::null_mut());
-    }
-    data
-}
-
-
-// lazy_static! {
-//     pub static ref SHARED_MEMORY: SharedState 
-// }
+// endregion
 
 // TODO: Replace var_type with sizeof_type
 #[derive(Debug)]
@@ -115,11 +55,6 @@ fn get_litteral(entity: Entity<'_>) -> String {
     }
 }
 
-pub fn get_static_code_parser() -> &'static Mutex<CodeParser> {
-    &CODEPARSER
-}
-
-
 impl CodeParser {
     pub fn new() -> Self {
         CodeParser {
@@ -156,7 +91,7 @@ impl CodeParser {
         let format = get_litteral(it);
         println!("Format: {}", format);
 
-        let re = Regex::new(r"%(\d+)?s").unwrap();
+        let re = regex::Regex::new(r"%(\d+)?s").unwrap();
         let mut arg_iter = args.iter();
         arg_iter.next();
 

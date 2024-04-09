@@ -1,43 +1,20 @@
 pub mod parser;
-use parser::TestStruct;
 
 extern crate clang;
 use clang::*;
-use std::os::unix::thread;
 use std::{env, process::Command};
 
-// use std::sync::{Arc, Mutex};
-// 
-// use lazy_static::lazy_static;
-// 
-// lazy_static! {
-//     #[no_mangle]
-//     static ref MYVAR: Arc<Mutex<i32>> = Arc::new(Mutex::new(0)); 
-// }
-//
-//
-
-use std::{default, thread as other_thread};
+use std::thread as other_thread;
 use std::time::Duration;
 
 fn main() {
-    let test = true;
-    if test {
-        let s: TestStruct = TestStruct { value: 5 }; 
-        let fd = parser::write_to_shared_memory(s);
-
-        let t = parser::read_from_shmem(fd);
-        println!("Read value: {:?}", t);
-
-        return;
-    }
 
     let dynamic: bool = true;
     other_thread::sleep(Duration::from_secs(2));
 
     if dynamic {
         let target_binary = "test/main";
-        let library_path = env::current_dir().unwrap().join("src/libintercept.so");
+        // let library_path = env::current_dir().unwrap().join("src/libintercept.so");
 
         {
             let output = Command::new(target_binary)
