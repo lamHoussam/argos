@@ -1,6 +1,8 @@
-use std::env;
+use core::panic;
+use std::{env, isize};
 use std::collections::HashMap;
-use libc::{O_CREAT, O_EXCL};
+use std::error::Error;
+use libc::c_void;
 use regex::Regex;
 use clang::{Entity, EntityKind};
 // use std::process;
@@ -8,7 +10,7 @@ use std::sync::{Mutex, Arc};
 use lazy_static::lazy_static;
 
 extern crate libc;
-use std::ffi::CString;
+
 use std::ptr;
 
 lazy_static! {
@@ -25,57 +27,54 @@ pub struct SharedState {
     pub value: Mutex<i32>
 }
 
-lazy_static! {
-    pub static ref SHARED_MEMORY: SharedState = {
-        let shmem_name = CString::new("/shmem_code_parser")
-            .expect("Failed");
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default)]
+pub struct TestStruct {
+    pub value: i32,
+}
 
-        let fd = unsafe {
-            libc::shm_open(shmem_name.as_ptr(), 
-                           O_CREAT | O_EXCL| libc::O_RDWR, 
-                           0o600)
-        };
+pub fn write_to_shared_memory(data: TestStruct) -> i32 {
+    let key = 69420;
+    let mem_size = std::mem::size_of::<TestStruct>() as libc::size_t;
+    let shm_id = unsafe { libc::shmget(key, mem_size, libc::IPC_CREAT | 0o666) };
+    println!("get shmem id {}", shm_id);
+    if shm_id < 0 {
+        panic!("Failed to write to shmem");
+    }
+    let ptr = unsafe { libc::shmat(shm_id, ptr::null() as *const libc::c_void, 0) as *mut TestStruct};
+    println!("attach shmem {:?}", ptr);
+    if (ptr as isize) == -1{
+        panic!("Failed to attach to shmem {}", std::io::Error::last_os_error());
+    }
 
-        if fd == -1 {
-            println!("Cant create shmem");    
-            return SharedState { value: Mutex::new(0) };
-        }
+    unsafe {
+        ptr::write(ptr, data);
+        // ptr.copy_from_nonoverlapping(data, 1);
+        // *ptr = data;
+        println!("Write to shmem");
+        libc::shmdt(ptr as *const c_void);
+    }
+    shm_id
+}
 
-
-        let res = unsafe {
-            libc::ftruncate(fd, 4096)
-        };
-        if res == -1 {
-            unsafe {
-                libc::close(fd);
-                libc::shm_unlink(shmem_name.as_ptr());
-            }
-
-            return SharedState { value: Mutex::new(0) };
-        }
-
-        println!("Created shmem: {:?}", fd);
-
-
-        SharedState {
-            value: Mutex::new(unsafe {
-               5 
-            }),
-        }
-
-    };
-
+pub fn read_from_shmem(shm_id: i32) -> TestStruct {
+    let ptr = unsafe { libc::shmat(shm_id, ptr::null(), 0) } as *mut TestStruct;
+    if ptr.is_null() {
+        panic!("Failed to attach to shmem");
+    }
+    let data = unsafe { *ptr };
+    unsafe {
+        // shmat(shm_id, ptr as *mut libc::c_void, 0);
+        libc::shmdt(ptr as *const _ as *mut libc::c_void);
+        libc::shmctl(shm_id, libc::IPC_RMID, ptr::null_mut());
+    }
+    data
 }
 
 
-pub fn print_myvar() {
-
-    let mutguard = SHARED_MEMORY.value.lock().unwrap();
-    let value: i32= mutguard.clone();
-    std::mem::drop(mutguard);
-
-    println!("Rust called with {}", value);
-}
+// lazy_static! {
+//     pub static ref SHARED_MEMORY: SharedState 
+// }
 
 // TODO: Replace var_type with sizeof_type
 #[derive(Debug)]

@@ -1,5 +1,5 @@
 pub mod parser;
-use parser::*;
+use parser::TestStruct;
 
 extern crate clang;
 use clang::*;
@@ -17,24 +17,20 @@ use std::{env, process::Command};
 //
 //
 
-use std::thread as other_thread;
+use std::{default, thread as other_thread};
 use std::time::Duration;
 
 fn main() {
-    // let test = true;
-    // if test {
+    let test = true;
+    if test {
+        let s: TestStruct = TestStruct { value: 5 }; 
+        let fd = parser::write_to_shared_memory(s);
 
-    //     {
-    //         let mut num = MYVAR.lock().unwrap();
-    //         *num += 1;
-    //     }
+        let t = parser::read_from_shmem(fd);
+        println!("Read value: {:?}", t);
 
-    //     println!("Freed with value: {}", MYVAR.lock().unwrap());
-
-    //     return;
-    // }
-
-
+        return;
+    }
 
     let dynamic: bool = true;
     other_thread::sleep(Duration::from_secs(2));
@@ -52,7 +48,7 @@ fn main() {
             // other_thread::sleep(Duration::from_secs(2));
         }
 
-        parser::print_myvar();
+        // parser::print_myvar();
 
         return;
     }
@@ -63,12 +59,12 @@ fn main() {
     let index = Index::new(&clng, false, false);
     let tu = index.parser(file_path).parse().unwrap();
 
-    let mut parser = CodeParser::new();
-    for entity in tu.get_entity().get_children() {
-        if let Some(location) = entity.get_location() {
-            if location.is_in_main_file() { parser.parse_code(&entity); }
-        }
-    }
+    // let mut parser = CodeParser::new();
+    // for entity in tu.get_entity().get_children() {
+    //     if let Some(location) = entity.get_location() {
+    //         if location.is_in_main_file() { parser.parse_code(&entity); }
+    //     }
+    // }
 
-    println!("Variables: {:?}", parser);
+    // println!("Variables: {:?}", parser);
 }

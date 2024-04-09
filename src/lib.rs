@@ -1,7 +1,6 @@
 use std::ffi::{c_char, CStr};
 
 mod parser;
-use parser::SHARED_MEMORY;
 use std::sync::{Mutex, Arc};
 use lazy_static::lazy_static;
 
@@ -25,9 +24,9 @@ pub unsafe extern "C" fn malloc_intercept(size: i32) {
     // prs.add_new_variable(String::from("Var"), 2, String::from("Type"));
 
 
-    let mut mutguard = SHARED_MEMORY.value.lock().unwrap();
-    *mutguard += 1;
-    std::mem::drop(mutguard);
+    // let mut mutguard = SHARED_MEMORY.value.lock().unwrap();
+    // *mutguard += 1;
+    // std::mem::drop(mutguard);
 }
 
 #[no_mangle]
@@ -35,11 +34,11 @@ pub unsafe extern "C" fn free_intercept() {
     // let prs = get_static_code_parser().lock().unwrap();
     // println!("Freed with value: {}", MYVAR.lock().unwrap());
 
-    let mutguard = SHARED_MEMORY.value.lock().unwrap();
-    let value: i32= mutguard.clone();
-    std::mem::drop(mutguard);
+    // let mutguard = SHARED_MEMORY.value.lock().unwrap();
+    // let value: i32= mutguard.clone();
+    // std::mem::drop(mutguard);
 
-    println!("Free called ref with {:?}", &value);
+    // println!("Free called ref with {:?}", &value);
 }
 
 
