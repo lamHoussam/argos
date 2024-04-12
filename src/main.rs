@@ -47,7 +47,7 @@ fn main() {
         let target_binary = args.file_path;
         let library_path = std::env::current_dir().unwrap().join("src/libintercept.so");
         let output = std::process::Command::new(target_binary)
-            // .env("LD_PRELOAD", library_path)
+            .env("LD_PRELOAD", library_path)
             .output()
             .expect("Failed to run target binary");
 

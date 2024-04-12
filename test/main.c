@@ -8,8 +8,8 @@
 // #include<sys/types.h>
 // #include<errno.h>
 
-extern void malloc_intercept(int size);
-extern void free_intercept();
+// extern void malloc_intercept(int size);
+// extern void free_intercept();
 
 
 int main(int argc, char *argv[]) {
@@ -36,14 +36,14 @@ int main(int argc, char *argv[]) {
 
     
 
-    // int* values = malloc(sizeof(int) * 5);
+    int* values = malloc(sizeof(int) * 5);
 
-    malloc_intercept(5);
-    free_intercept();
+    // malloc_intercept(5);
+    // free_intercept();
 
     // sleep(2);
 
-    // free(values);
+    free(values);
     // char buf[10];
     // strcpy(buf, "Really long text!");
     // scanf("%15s", buf);

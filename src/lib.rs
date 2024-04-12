@@ -51,7 +51,7 @@ pub fn write_to_shmem<T>(data: T, shm_key: i32) where T: Copy + Debug {
         // shmflg = 0 means shm already exists
         let shmem_id = libc::shmget(shm_key, mem_size, 0o777 | IPC_CREAT);
         let ptr = libc::shmat(shmem_id, ptr::null() as *const libc::c_void, 0) as *mut T;
-        println!("Write to shmem {:?}", ptr);
+        // println!("Write to shmem {:?}", ptr);
         if ptr.is_null() || (ptr as isize) == -1 {
             panic!("Failed to attach to shmem on write");
         }
@@ -85,23 +85,23 @@ pub fn write_to_new_shmem<T>(data: T, key: i32) -> i32 where T: Copy{
 // TODO: Return a value on error instead of panic
 pub fn read_from_shmem<T>(shm_key: i32) -> T where T: Copy + Debug {
     let mem_size = std::mem::size_of::<T>() as libc::size_t;
-    println!("Read shmid");
+    // println!("Read shmid");
     let shmem_id = unsafe {
         libc::shmget(shm_key, mem_size, 0o777 | IPC_CREAT)
     };
-    println!("Start read");
+    // println!("Start read");
     let ptr = unsafe { libc::shmat(shmem_id,ptr::null() as *const libc::c_void, 0) } as *mut T;
-    println!("Read from shmem {:?}", ptr);
+    // println!("Read from shmem {:?}", ptr);
     if ptr.is_null() || (ptr as isize) == -1 {
         panic!("Failed to attach to shmem on read");
     }
     let data = unsafe { *ptr };
-    println!("Data {:?}", data);
+    // println!("Data {:?}", data);
     unsafe {
         libc::shmdt(ptr as *const libc::c_void);
-        println!("shmdt Data");
+        // println!("shmdt Data");
         libc::shmctl(shmem_id, libc::IPC_RMID, ptr::null_mut());
-        println!("shmctl Data");
+        // println!("shmctl Data");
     }
     data
 }

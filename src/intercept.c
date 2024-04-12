@@ -24,7 +24,7 @@ void free(void* ptr) {
         real_free = dlsym(RTLD_NEXT,"free");
     }
 
-    printf("Free called\n");
+    // printf("Free called\n");
     free_intercept();
     real_free(ptr);
 }
