@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CStr};
+use std::ffi::c_char;
 
 use std::fmt::Debug;
 use std::ptr;
@@ -7,10 +7,45 @@ use libc::IPC_CREAT;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-pub struct TestStruct {
-    pub value: i32,
-    pub mallocs: i32,
-    pub frees: i32,
+pub struct PtrValue {
+    pub size: i32,
+    pub name: *const c_char,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DynamicPtrTracker {
+    // TODO: Need to store a hashmap of pointers to specific values (size, name, type)
+    // TODO: Add mutex to value to avoid circular malloc
+    pub ptr_values: [PtrValue; 10],
+    pub ptr_count: i8,
+    pub max_ptrs: i8,
+}
+
+impl DynamicPtrTracker {
+    pub fn new() -> Self {
+        DynamicPtrTracker {
+            ptr_values: [PtrValue { size: 0, name: ptr::null() }; 10],
+            ptr_count: 0,
+            max_ptrs: 10,
+        }
+    }
+    
+    pub fn get_ptr(&self, name: *const c_char) -> PtrValue {
+        for ptr_value in self.ptr_values.iter() {
+            if ptr_value.name == name {
+                return *ptr_value;
+            }
+        }
+        PtrValue { size: 0, name: ptr::null() }
+    }
+
+    pub fn add_ptr(&mut self, ptr_name: *const c_char, ptr_size: i32) {
+        if self.ptr_count < self.max_ptrs {
+            self.ptr_values[self.ptr_count as usize] = PtrValue { size: ptr_size, name: ptr_name };
+            self.ptr_count += 1;
+        }
+    }
 }
 
 /**
@@ -28,10 +63,7 @@ pub struct TestStruct {
  */
 
 
-
-// Create a global mutable static i32 variable
-pub static mut GLOBAL_VAR: i32 = 0;
-
+/*
 fn get_string_from_raw_ptr(ptr: *const c_char) -> String {
      let c_str = unsafe {
         CStr::from_ptr(ptr)
@@ -40,6 +72,7 @@ fn get_string_from_raw_ptr(ptr: *const c_char) -> String {
     let str_slice = std::str::from_utf8(buf).unwrap();
     str_slice.to_owned()
 }
+*/
 
 
 // TODO: Implement write to shmem
@@ -60,7 +93,7 @@ pub fn write_to_shmem<T>(data: T, shm_key: i32) where T: Copy + Debug {
     }
 }
 
-pub fn write_to_new_shmem<T>(data: T, key: i32) -> i32 where T: Copy{
+pub fn write_to_new_shmem<T>(data: T, key: i32) -> i32 where T: Copy + Debug {
     let mem_size = std::mem::size_of::<T>() as libc::size_t;
     let shm_id = unsafe { libc::shmget(key, mem_size, libc::IPC_CREAT | libc::IPC_EXCL | 0o777) };
     println!("get shmem id {}", shm_id);
@@ -108,24 +141,25 @@ pub fn read_from_shmem<T>(shm_key: i32) -> T where T: Copy + Debug {
 
 
 #[no_mangle]
-pub unsafe extern "C" fn malloc_intercept(size: i32) {
+pub unsafe extern "C" fn malloc_intercept(size: i32, ptr: *mut libc::c_void) {
     let shm_key= 43;
-    let mut tst_struct = read_from_shmem::<TestStruct>(shm_key);
+    let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
     // TODO: Check if shmem already open to avoid recursive malloc calls
     // Or open shmem at the beginning of C program and write at the end
     // But with this we need to add a new argument (pointer to TestStruct)
-    tst_struct.mallocs += 1;
+    // tst_struct.mallocs += 1;
+    tst_struct.add_ptr(ptr as *const c_char, size);
 
     write_to_shmem(tst_struct, shm_key);
 }
 
 #[no_mangle]
 pub 
-unsafe extern "C" fn free_intercept() {
-    let shm_key = 43;
-    let mut tst_struct = read_from_shmem::<TestStruct>(shm_key);
+unsafe extern "C" fn free_intercept(_ptr: *mut libc::c_void) {
+    // let shm_key = 43;
+    // let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
 
-    tst_struct.frees += 1;
+    // tst_struct.frees += 1;
 
-    write_to_shmem(tst_struct, shm_key);
+    // write_to_shmem(tst_struct, shm_key);
 }

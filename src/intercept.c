@@ -3,8 +3,8 @@
 #include <stdio.h>
 
 // extern void malloc_intercept(char* var_name, size_t size, char* var_type);
-extern void malloc_intercept(int size);
-extern void free_intercept();
+extern void malloc_intercept(int size, void* ptr);
+extern void free_intercept(void* ptr);
 
 void* malloc(size_t size) {
     static void* (*real_malloc)(size_t) = NULL;
@@ -13,7 +13,7 @@ void* malloc(size_t size) {
     }
 
     void* p = real_malloc(size);
-    malloc_intercept((int)size);
+    malloc_intercept((int)size, p);
     return p;
 }
 
@@ -25,7 +25,7 @@ void free(void* ptr) {
     }
 
     // printf("Free called\n");
-    free_intercept();
+    free_intercept(ptr);
     real_free(ptr);
 }
 

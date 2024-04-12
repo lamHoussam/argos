@@ -7,7 +7,7 @@ use clang::{Clang, Index};
 use clap::Parser as ClapParser;
 
 pub mod lib;
-use lib::{read_from_shmem, write_to_new_shmem, TestStruct};
+use lib::{read_from_shmem, write_to_new_shmem, TestStruct, DynamicPtrTracker};
 
  
 
@@ -41,7 +41,7 @@ fn main() {
     }
     else if args.mode == "dynamic" {
         let shm_key = 43;
-        let shmem_id = write_to_new_shmem(TestStruct { value: 42, mallocs: 0, frees: 0 }, shm_key);
+        let shmem_id = write_to_new_shmem(DynamicPtrTracker::new(), shm_key);
         println!("Shmem ID: {:?}", shmem_id);
 
         let target_binary = args.file_path;
@@ -53,10 +53,8 @@ fn main() {
 
         println!("Output: {:?}", output);
 
-        let test_struct = read_from_shmem::<TestStruct>(shm_key);
+        let test_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
         println!("TestStruct: {:?}", test_struct);
-        
-
     }
     else {
         panic!("Mode should either be static or dynamic");
