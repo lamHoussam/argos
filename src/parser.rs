@@ -1,29 +1,9 @@
-use std::collections::HashMap;
 use clang::{Entity, EntityKind};
-// use std::process;
+use std::collections::HashMap;
 
-// lazy_static! {
-//     #[no_mangle]
-//     static ref CODEPARSER: Mutex<CodeParser> = Mutex::new(CodeParser::new()); 
-// }
+pub mod ros_utils;
+use ros_utils::{Variable};
 
-
-// region Test
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
-pub struct TestStruct {
-    pub value: i32,
-}
-// endregion
-
-// TODO: Replace var_type with sizeof_type
-#[derive(Debug)]
-pub struct Variable {
-    pub name: String,
-    pub size: usize,
-    pub var_type: String,
-    pub max_bounds_checked: usize,
-}
 
 #[derive(Debug)]
 pub struct CodeParser {

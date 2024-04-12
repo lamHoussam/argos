@@ -12,8 +12,9 @@ rand = "0.8.5"
 lazy_static = "1.4.0"
 shared_memory = "0.12.4"
 libc = "0.2.153"
+clap = { version = "4.5.4", features = ["derive"] }
 
 [lib]
 name = "rust_overflow_sentinel"
-crate-type = ["staticlib"]
+crate-type = ["cdylib"]
 
