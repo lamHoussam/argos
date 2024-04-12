@@ -1,10 +1,27 @@
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <stdio.h>
+#include <string.h>
 
 // extern void malloc_intercept(char* var_name, size_t size, char* var_type);
 extern void malloc_intercept(int size, void* ptr);
 extern void free_intercept(void* ptr);
+extern int strcpy_intercept(char* dest, const char* src);
+
+
+char* strcpy(char* dest, const char* src) {
+    static char* (*real_strcpy)(char*, const char*) = NULL;
+    if (!real_strcpy) {
+        real_strcpy = dlsym(RTLD_NEXT, "strcpy");
+    }
+
+    printf("Intercepted strcpy\n");
+    int stat = strcpy_intercept(dest, src);
+    char* p = NULL;
+    if (stat == 1)
+        p = real_strcpy(dest, src);
+    return p;
+}
 
 void* malloc(size_t size) {
     static void* (*real_malloc)(size_t) = NULL;
@@ -13,7 +30,7 @@ void* malloc(size_t size) {
     }
 
     void* p = real_malloc(size);
-    malloc_intercept((int)size, p);
+    // malloc_intercept((int)size, p);
     return p;
 }
 

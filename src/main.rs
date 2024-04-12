@@ -7,7 +7,7 @@ use clang::{Clang, Index};
 use clap::Parser as ClapParser;
 
 pub mod lib;
-use lib::{read_from_shmem, write_to_new_shmem, TestStruct, DynamicPtrTracker};
+use lib::{read_from_shmem, write_to_new_shmem, DynamicPtrTracker};
 
  
 

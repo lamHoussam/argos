@@ -36,12 +36,13 @@ int main(int argc, char *argv[]) {
 
     
 
-    int* values = malloc(sizeof(int) * 5);
+    char* values = malloc(sizeof(char) * 6);
 
     // malloc_intercept(5);
     // free_intercept();
 
     // sleep(2);
+    strcpy((char*)values, "Helloooooooooooo");
 
     free(values);
     // char buf[10];

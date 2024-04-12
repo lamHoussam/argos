@@ -20,6 +20,7 @@ pub struct DynamicPtrTracker {
     pub ptr_values: [PtrValue; 10],
     pub ptr_count: i8,
     pub max_ptrs: i8,
+    pub strcpy_bounds_violated: i8,
 }
 
 impl DynamicPtrTracker {
@@ -28,6 +29,7 @@ impl DynamicPtrTracker {
             ptr_values: [PtrValue { size: 0, name: ptr::null() }; 10],
             ptr_count: 0,
             max_ptrs: 10,
+            strcpy_bounds_violated: 0,
         }
     }
     
@@ -154,12 +156,29 @@ pub unsafe extern "C" fn malloc_intercept(size: i32, ptr: *mut libc::c_void) {
 }
 
 #[no_mangle]
-pub 
-unsafe extern "C" fn free_intercept(_ptr: *mut libc::c_void) {
+pub unsafe extern "C" fn free_intercept(_ptr: *mut libc::c_void) {
     // let shm_key = 43;
     // let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
 
     // tst_struct.frees += 1;
 
     // write_to_shmem(tst_struct, shm_key);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn strcpy_intercept(dest: *mut libc::c_char, src: *const libc::c_char) -> i32 {
+    let shm_key = 43;
+    let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
+
+    let dest_size = libc::strlen(dest);
+    let srce_size = libc::strlen(src);
+    
+    let mut stat = 1;
+    if srce_size > dest_size {
+        tst_struct.strcpy_bounds_violated += 1;
+        stat = 0;
+    }
+
+    write_to_shmem(tst_struct, shm_key);
+    return stat;
 }

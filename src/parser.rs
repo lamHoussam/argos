@@ -2,7 +2,7 @@ use clang::{Entity, EntityKind};
 use std::collections::HashMap;
 
 pub mod ros_utils;
-use ros_utils::{Variable};
+use ros_utils::Variable;
 
 
 #[derive(Debug)]
@@ -11,11 +11,10 @@ pub struct CodeParser {
 }
 
 impl Variable {
-    pub fn new(var_name: String, var_size: usize, var_type: String) -> Self {
+    pub fn new(var_name: String, var_size: usize) -> Self {
         Variable {
             name: var_name,
             size: var_size,
-            var_type: var_type,
             max_bounds_checked: 100,
         }
     }
@@ -42,8 +41,8 @@ impl CodeParser {
         }
     }
 
-    pub fn add_new_variable(&mut self, var_name: String, size: usize, var_type: String) {
-        self.variables.insert(var_name.clone(), Variable::new(var_name, size, var_type));
+    pub fn add_new_variable(&mut self, var_name: String, size: usize) {
+        self.variables.insert(var_name.clone(), Variable::new(var_name, size));
     }
 
     fn parse_strcpy(&self, args: &Vec<Entity<'_>>) -> bool {
@@ -116,7 +115,7 @@ impl CodeParser {
                         // TODO: Multiply size by sizeof(type_name)
                         println!("name: {:?}, size: {:?}, type: {:?}", type_name, size, type_name);
                         self.add_new_variable(entity.get_name()
-                            .unwrap_or("Variable".to_string()), size, type_name.to_string());
+                            .unwrap_or("Variable".to_string()), size);
                     },
                     clang::TypeKind::Pointer => {
                         // Only for string literal initialisation or empty declaration
@@ -126,13 +125,12 @@ impl CodeParser {
                             let size = value.len() - 1; // Remove "" and add \0 in count
                             println!("Found value: {}, size: {}, displ name: {}", value, size, type_name);
                             self.add_new_variable(entity.get_name()
-                                .unwrap_or("Variable".to_string()), size, type_name)
+                                .unwrap_or("Variable".to_string()), size)
                         } else {
                             self.add_new_variable(entity.get_name()
-                                .unwrap_or("Variable".to_string()), 0, type_name)
+                                .unwrap_or("Variable".to_string()), 0)
                         }
 
-                        // TODO: Multiply size by sizeof(type_name)
                         // println!("name: {:?}", display_name);
                     }, 
                     _ => {
