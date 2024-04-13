@@ -18,9 +18,13 @@ struct Args {
     # [arg(short, long)]
     mode: String,
 
-    /// path to the file to check
+    /// Path to the file to check
     # [arg(short, long)]
     file_path: String,
+
+    /// Correct source code
+    # [arg(short, long, default_value_t = false)]
+    correct_code: bool,
 }
 
 
@@ -32,7 +36,7 @@ fn main() {
         let index = Index::new(&clng, false, false);
         let tu = index.parser(args.file_path).parse().expect("File not found");
 
-        let mut parser = CodeParser::new();
+        let mut parser = CodeParser::new(args.correct_code);
         for entity in tu.get_entity().get_children() {
             if let Some(location) = entity.get_location() {
                 if location.is_in_main_file() { parser.parse_code(&entity); }

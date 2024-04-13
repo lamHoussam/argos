@@ -4,20 +4,10 @@ use std::collections::HashMap;
 pub mod ros_utils;
 use ros_utils::Variable;
 
-
 #[derive(Debug)]
 pub struct CodeParser {
-        variables: HashMap<String, Variable>,
-}
-
-impl Variable {
-    pub fn new(var_name: String, var_size: usize) -> Self {
-        Variable {
-            name: var_name,
-            size: var_size,
-            max_bounds_checked: 100,
-        }
-    }
+    variables: HashMap<String, Variable>,
+    correct_src_code: bool,
 }
 
 fn get_litteral(entity: Entity<'_>) -> String {
@@ -35,9 +25,10 @@ fn get_litteral(entity: Entity<'_>) -> String {
 }
 
 impl CodeParser {
-    pub fn new() -> Self {
+    pub fn new(correct_source_code: bool) -> Self {
         CodeParser {
             variables: HashMap::new(),
+            correct_src_code: correct_source_code,
         }
     }
 
@@ -54,11 +45,15 @@ impl CodeParser {
         match srce.get_display_name() {
             Some(var_name) => {
                 let var_srce = self.variables.get(&var_name).expect("Variable not declared");
+                let replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), args[1].get_display_name().unwrap(), var_dest.size);
+                println!("Replace with: {}", replacement);
                 var_srce.size >= var_dest.size
             },
             None => {
                 let value = get_litteral(srce);
                 println!("Litteral: {}", value);
+                let replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), value, var_dest.size);
+                println!("Replace with: {}", replacement);
                 let size = value.len() - 2;
                 size >= var_dest.size
             },
