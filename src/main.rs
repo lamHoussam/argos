@@ -7,7 +7,7 @@ use clang::{Clang, Index};
 use clap::Parser as ClapParser;
 
 pub mod lib;
-use lib::{read_from_shmem, write_to_new_shmem, DynamicPtrTracker};
+use lib::{read_from_shmem, write_to_new_shmem, detach_shmem, DynamicPtrTracker};
 
  
 
@@ -46,15 +46,23 @@ fn main() {
 
         let target_binary = args.file_path;
         let library_path = std::env::current_dir().unwrap().join("src/libintercept.so");
-        let output = std::process::Command::new(target_binary)
+        let result_output = std::process::Command::new(target_binary)
             .env("LD_PRELOAD", library_path)
-            .output()
-            .expect("Failed to run target binary");
+            .output();
+
+        let output = match result_output {
+            Ok(output) => output,
+            Err(e) => {
+                detach_shmem(shm_key);
+                panic!("Failed to execute process: {}", e)
+            },
+        };
 
         println!("Output: {:?}", output);
 
-        let test_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
-        println!("TestStruct: {:?}", test_struct);
+        let mut test_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
+        test_struct.check();
+        println!("TestStruct: {:#?}", test_struct);
     }
     else {
         panic!("Mode should either be static or dynamic");

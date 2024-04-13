@@ -42,9 +42,9 @@ int main(int argc, char *argv[]) {
     // free_intercept();
 
     // sleep(2);
-    strcpy((char*)values, "Helloooooooooooo");
+    strcpy(values, "Hel");
 
-    free(values);
+    // free(values);
     // char buf[10];
     // strcpy(buf, "Really long text!");
     // scanf("%15s", buf);

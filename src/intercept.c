@@ -8,7 +8,6 @@ extern void malloc_intercept(int size, void* ptr);
 extern void free_intercept(void* ptr);
 extern int strcpy_intercept(char* dest, const char* src);
 
-
 char* strcpy(char* dest, const char* src) {
     static char* (*real_strcpy)(char*, const char*) = NULL;
     if (!real_strcpy) {
@@ -30,7 +29,7 @@ void* malloc(size_t size) {
     }
 
     void* p = real_malloc(size);
-    // malloc_intercept((int)size, p);
+    malloc_intercept((int)size, p);
     return p;
 }
 
@@ -41,7 +40,7 @@ void free(void* ptr) {
         real_free = dlsym(RTLD_NEXT,"free");
     }
 
-    // printf("Free called\n");
+    printf("Free called\n");
     free_intercept(ptr);
     real_free(ptr);
 }

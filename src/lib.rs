@@ -17,19 +17,23 @@ pub struct PtrValue {
 pub struct DynamicPtrTracker {
     // TODO: Need to store a hashmap of pointers to specific values (size, name, type)
     // TODO: Add mutex to value to avoid circular malloc
-    pub ptr_values: [PtrValue; 10],
+    ptr_values: [PtrValue; 100],
     pub ptr_count: i8,
     pub max_ptrs: i8,
     pub strcpy_bounds_violated: i8,
+    pub data_leaks: i8,
+    pub used_ptrs: i8,
 }
 
 impl DynamicPtrTracker {
     pub fn new() -> Self {
         DynamicPtrTracker {
-            ptr_values: [PtrValue { size: 0, name: ptr::null() }; 10],
+            ptr_values: [PtrValue { size: 0, name: ptr::null() }; 100],
             ptr_count: 0,
             max_ptrs: 10,
             strcpy_bounds_violated: 0,
+            data_leaks: 0,
+            used_ptrs: 0,
         }
     }
     
@@ -43,11 +47,37 @@ impl DynamicPtrTracker {
     }
 
     pub fn add_ptr(&mut self, ptr_name: *const c_char, ptr_size: i32) {
-        if self.ptr_count < self.max_ptrs {
-            self.ptr_values[self.ptr_count as usize] = PtrValue { size: ptr_size, name: ptr_name };
-            self.ptr_count += 1;
+        for ptr_value in self.ptr_values.iter_mut() {
+            if ptr_value.size == 0 {
+                // self.ptr_values[self.ptr_count as usize] = PtrValue { size: ptr_size, name: ptr_name };
+                ptr_value.size = ptr_size;
+                ptr_value.name = ptr_name;
+                self.ptr_count += 1;
+                break;
+            }
+        }
+
+        self.used_ptrs += 1;
+    }
+
+    pub fn remove_ptr(&mut self, ptr_name: *const c_char) {
+        for ptr_value in self.ptr_values.iter_mut() {
+            if ptr_value.name == ptr_name {
+                ptr_value.size = 0;
+                ptr_value.name = ptr::null();
+                self.ptr_count -= 1;
+            }
         }
     }
+
+    pub fn get_number_unfreed_ptrs(&self) -> i8 {
+        self.ptr_values.iter().filter(|ptr_value| ptr_value.size != 0).count() as i8
+    }
+
+    pub fn check(&mut self) {
+        self.data_leaks = self.get_number_unfreed_ptrs();
+    }
+
 }
 
 /**
@@ -141,6 +171,31 @@ pub fn read_from_shmem<T>(shm_key: i32) -> T where T: Copy + Debug {
     data
 }
 
+pub fn detach_shmem(shm_key: i32) {
+    let mem_size = 0;
+    let shmem_id = unsafe {
+        libc::shmget(shm_key, mem_size, 0o777) 
+    };
+    unsafe {
+        libc::shmctl(shmem_id, libc::IPC_RMID, ptr::null_mut());
+    }
+}
+
+/** 
+ * TODO: Implement intercept for 
+ *  - malloc
+ *  - free
+ *  - strcpy
+ *  ? calloc
+ *  ? realloc
+ *  ? strcat
+ *  ? memcpy
+ *  ? memmove
+ *  ? memset
+ *  ? scanf
+ * 
+ */
+
 
 #[no_mangle]
 pub unsafe extern "C" fn malloc_intercept(size: i32, ptr: *mut libc::c_void) {
@@ -149,7 +204,6 @@ pub unsafe extern "C" fn malloc_intercept(size: i32, ptr: *mut libc::c_void) {
     // TODO: Check if shmem already open to avoid recursive malloc calls
     // Or open shmem at the beginning of C program and write at the end
     // But with this we need to add a new argument (pointer to TestStruct)
-    // tst_struct.mallocs += 1;
     tst_struct.add_ptr(ptr as *const c_char, size);
 
     write_to_shmem(tst_struct, shm_key);
@@ -157,12 +211,13 @@ pub unsafe extern "C" fn malloc_intercept(size: i32, ptr: *mut libc::c_void) {
 
 #[no_mangle]
 pub unsafe extern "C" fn free_intercept(_ptr: *mut libc::c_void) {
-    // let shm_key = 43;
-    // let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
-
+    let shm_key = 43;
+    let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
     // tst_struct.frees += 1;
 
-    // write_to_shmem(tst_struct, shm_key);
+    tst_struct.remove_ptr(_ptr as *const c_char);
+
+    write_to_shmem(tst_struct, shm_key);
 }
 
 #[no_mangle]
