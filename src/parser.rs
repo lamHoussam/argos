@@ -1,15 +1,14 @@
-use clang::{Entity, EntityKind};
+use clang::{source::SourceRange, Entity, EntityKind};
 use std::collections::HashMap;
-
-pub mod ros_utils;
-use ros_utils::Variable;
+use crate::lib::Variable;
 
 #[derive(Debug)]
+/// Struct to parse the C code, holds variables and their values
 pub struct CodeParser {
     variables: HashMap<String, Variable>,
-    correct_src_code: bool,
 }
 
+/// Get the litteral String value of an entity
 fn get_litteral(entity: Entity<'_>) -> String {
     let mut it = entity;
 
@@ -25,10 +24,9 @@ fn get_litteral(entity: Entity<'_>) -> String {
 }
 
 impl CodeParser {
-    pub fn new(correct_source_code: bool) -> Self {
+    pub fn new() -> Self {
         CodeParser {
             variables: HashMap::new(),
-            correct_src_code: correct_source_code,
         }
     }
 
@@ -36,34 +34,50 @@ impl CodeParser {
         self.variables.insert(var_name.clone(), Variable::new(var_name, size));
     }
 
-    fn parse_strcpy(&self, args: &Vec<Entity<'_>>) -> bool {
+    /// Parse the strcpy function
+    fn parse_strcpy(&self, args: &Vec<Entity<'_>>, function_range: SourceRange) {
         let dest = args[0];
         let srce = args[1];
 
         let var_dest = self.variables.get(&dest.get_display_name().unwrap()).expect("Variable not declared");
 
+        let bytes_offset_start = function_range.get_start();
+        let bytes_offset_end = function_range.get_end();
+
+        let mut found_buff_overflow = false;
+        let mut replacement = String::new();
+
         match srce.get_display_name() {
             Some(var_name) => {
                 let var_srce = self.variables.get(&var_name).expect("Variable not declared");
-                let replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), args[1].get_display_name().unwrap(), var_dest.size);
-                println!("Replace with: {}", replacement);
-                var_srce.size >= var_dest.size
+                replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), args[1].get_display_name().unwrap(), var_dest.size);
+                found_buff_overflow = var_srce.size >= var_dest.size;
             },
             None => {
                 let value = get_litteral(srce);
-                println!("Litteral: {}", value);
-                let replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), value, var_dest.size);
-                println!("Replace with: {}", replacement);
+                // println!("Litteral: {}", value);
+                replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), value, var_dest.size);
                 let size = value.len() - 2;
-                size >= var_dest.size
+                found_buff_overflow = size >= var_dest.size;
             },
+        }
+
+        if found_buff_overflow {
+            println!("Detected buffer overflow pattern at line {:?}", bytes_offset_start.get_file_location().line);
+            println!("\tReplace with: {}", replacement);
+            println!("\tReplace this range of bytes: {:?} -> {:?}", bytes_offset_start.get_file_location().offset, bytes_offset_end.get_file_location().offset);
+        } else {
+            println!("WARNING: Use of unsafe function strcpy");
         }
     }
 
-    fn parse_scanf(&self, args: &Vec<Entity<'_>>) -> bool {
+    fn parse_scanf(&self, args: &Vec<Entity<'_>>, range: SourceRange) -> bool {
         let it = args[0];
         let format = get_litteral(it);
         println!("Format: {}", format);
+
+        let mut found_vuln = false;
+        let mut replacement = String::new();
 
         let re = regex::Regex::new(r"%(\d+)?s").unwrap();
         let mut arg_iter = args.iter();
@@ -80,14 +94,27 @@ impl CodeParser {
                 Some(value) => {
                     let var_name = value.get_display_name().unwrap();
                     let var = self.variables.get(&var_name).expect("Variable not declared!");
-                    if var.size >= buffer_size { return true; }
+                    if var.size >= buffer_size { 
+                        replacement = format!("scanf({}, %{}s)", var_name, buffer_size);
+                        found_vuln = true; 
+                    }
                     // println!("Goes with {}, size: {}", var_name, );
                 },
                 None => break,
             }
         }
 
-        false
+        if found_vuln {
+            let bytes_offset_start = range.get_start();
+            let bytes_offset_end = range.get_end();
+
+            println!("Detected buffer overflow at line {:?}", bytes_offset_start.get_file_location().line);
+            println!("\tReplace with: {}", replacement);
+            println!("\tReplace this range of bytes: {:?} -> {:?}", bytes_offset_start.get_file_location().offset, bytes_offset_end.get_file_location().offset);
+        } else {
+            println!("WARNING: Use of unsafe function strcat");
+        }
+        found_vuln
     }
 
     pub fn parse_code(&mut self, entity: &Entity<'_>) {
@@ -143,33 +170,16 @@ impl CodeParser {
             EntityKind::CallExpr => {
                 // let tpe = entity.get_type().unwrap();
                 let display_name = entity.get_display_name().unwrap();
-                if display_name == "strcpy" {
-                    if let Some(args) = entity.get_arguments() {
-                        let found_buff_overflow = self.parse_strcpy(&args);
-                        if found_buff_overflow {
-                            println!("Detected buffer overflow pattern at line {:?}", entity.get_location().unwrap().get_file_location());
-                        } else {
-                            println!("WARNING: Use of unsafe function strcpy");
-                        }
-                    }
-                }
-                else if display_name == "strcat" {
-                    if let Some(args) = entity.get_arguments() {
-                        let found_buff_overflow = self.parse_strcpy(&args);
-                        if found_buff_overflow {
-                            println!("Detected buffer overflow at line {:?}", entity.get_location().unwrap().get_file_location());
-                        } else {
-                            println!("WARNING: Use of unsafe function strcat");
-                        }
-                    }
-                } else if display_name == "scanf" {
-                    if let Some(args) = entity.get_arguments() {
-                        let found_buff_overflow = self.parse_scanf(&args);
-                        if found_buff_overflow {
-                            println!("Detected buffer overflow at line {:?}", entity.get_location().unwrap().get_file_location());
-                        } else {
-                            println!("WARNING: Use of unsafe function strcat");
-                        }
+                let range = entity.get_range().unwrap();
+                // println!("Function call: {}, range: {:?}", display_name, range);
+                
+                if let Some(args) = entity.get_arguments() {
+                    if display_name == "strcpy" {
+                        self.parse_strcpy(&args, range);
+                    } else if display_name == "strcat" {
+                        self.parse_strcpy(&args, range);
+                    } else if display_name == "scanf" {
+                        let found_buff_overflow = self.parse_scanf(&args, range);
                     }
                 }
                 // println!("Function call: {}", display_name);

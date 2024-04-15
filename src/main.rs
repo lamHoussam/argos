@@ -6,10 +6,8 @@ use clang::{Clang, Index};
 
 use clap::Parser as ClapParser;
 
-pub mod lib;
-use lib::{read_from_shmem, write_to_new_shmem, detach_shmem, DynamicPtrTracker};
-
- 
+mod lib;
+use crate::lib::{read_from_shmem, write_to_new_shmem, detach_shmem, DynamicPtrTracker};
 
 #[derive(ClapParser, Debug)]
 #[command()]
@@ -21,12 +19,9 @@ struct Args {
     /// Path to the file to check
     # [arg(short, long)]
     file_path: String,
-
-    /// Correct source code
-    # [arg(short, long, default_value_t = false)]
-    correct_code: bool,
 }
 
+// TODO: Performance test
 
 fn main() {
     let args = Args::parse();
@@ -34,9 +29,13 @@ fn main() {
     if args.mode == "static" {
         let clng = Clang::new().unwrap();
         let index = Index::new(&clng, false, false);
-        let tu = index.parser(args.file_path).parse().expect("File not found");
+        let tu = index.parser(args.file_path.clone()).parse().expect("File not found");
+        let file_content = std::fs::read_to_string(&args.file_path).expect("File not found");
 
-        let mut parser = CodeParser::new(args.correct_code);
+        let c: Vec<u8> = file_content.bytes().collect();
+        println!("File content: {:?}", c.get(148));
+
+        let mut parser = CodeParser::new();
         for entity in tu.get_entity().get_children() {
             if let Some(location) = entity.get_location() {
                 if location.is_in_main_file() { parser.parse_code(&entity); }
@@ -44,12 +43,17 @@ fn main() {
         }
     }
     else if args.mode == "dynamic" {
-        let shm_key = 43;
+        let shm_key = 42;
         let shmem_id = write_to_new_shmem(DynamicPtrTracker::new(), shm_key);
         println!("Shmem ID: {:?}", shmem_id);
 
+        println!("-------------------STARTING DYNAMIC MODE-------------------");
         let target_binary = args.file_path;
+        println!("Target binary: {:?}", target_binary);
         let library_path = std::env::current_dir().unwrap().join("src/libintercept.so");
+        println!(">>> Loading library: {:?}", library_path);
+        println!(">>> Starting binary: {:?}", library_path);
+
         let result_output = std::process::Command::new(target_binary)
             .env("LD_PRELOAD", library_path)
             .output();
@@ -62,55 +66,14 @@ fn main() {
             },
         };
 
-        println!("Output: {:?}", output);
+        println!("Output: {}", String::from_utf8(output.stdout).unwrap());
 
         let mut test_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
-        test_struct.check();
-        println!("TestStruct: {:#?}", test_struct);
+        detach_shmem(shm_key);
+        test_struct.print_report();
     }
     else {
         panic!("Mode should either be static or dynamic");
     }
 
 }
-
-/*
-fn main() {
-
-    let dynamic: bool = true;
-    other_thread::sleep(Duration::from_secs(2));
-
-    if dynamic {
-        let target_binary = "test/main";
-        // let library_path = env::current_dir().unwrap().join("src/libintercept.so");
-
-        {
-            let output = Command::new(target_binary)
-//                 .env("LD_PRELOAD", library_path)
-                .output();
-            println!("Output: {:?}", output);
-
-            // other_thread::sleep(Duration::from_secs(2));
-        }
-
-        // parser::print_myvar();
-
-        return;
-    }
-
-    let file_path = "test/main.c";
-
-    let clng = Clang::new().unwrap();
-    let index = Index::new(&clng, false, false);
-    let tu = index.parser(file_path).parse().unwrap();
-
-    // let mut parser = CodeParser::new();
-    // for entity in tu.get_entity().get_children() {
-    //     if let Some(location) = entity.get_location() {
-    //         if location.is_in_main_file() { parser.parse_code(&entity); }
-    //     }
-    // }
-
-    // println!("Variables: {:?}", parser);
-}
-*/

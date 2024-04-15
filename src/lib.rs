@@ -1,12 +1,28 @@
-use std::ffi::c_char;
+use std::{ffi::c_char, fmt::Debug, ptr};
+// TODO: multithreaded and multiprocess
 
-use std::fmt::Debug;
-use std::ptr;
+#[derive(Debug)]
+/// Struct to store the variables in the C code
+pub struct Variable {
+    pub name: String,
+    pub size: usize,
+    pub max_bounds_checked: bool,
+}
 
-use libc::IPC_CREAT;
+impl Variable {
+    pub fn new(var_name: String, var_size: usize) -> Self {
+        Variable {
+            name: var_name,
+            size: var_size,
+            max_bounds_checked: false,
+        }
+    }
+}
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
+/// Struct to store a pointer from the binary
 pub struct PtrValue {
     pub size: i32,
     pub name: *const c_char,
@@ -14,9 +30,9 @@ pub struct PtrValue {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
+/// Struct to store the pointers from the binary, and import data for security report
 pub struct DynamicPtrTracker {
     // TODO: Need to store a hashmap of pointers to specific values (size, name, type)
-    // TODO: Add mutex to value to avoid circular malloc
     ptr_values: [PtrValue; 100],
     pub ptr_count: i8,
     pub max_ptrs: i8,
@@ -30,7 +46,7 @@ impl DynamicPtrTracker {
         DynamicPtrTracker {
             ptr_values: [PtrValue { size: 0, name: ptr::null() }; 100],
             ptr_count: 0,
-            max_ptrs: 10,
+            max_ptrs: 100,
             strcpy_bounds_violated: 0,
             data_leaks: 0,
             used_ptrs: 0,
@@ -62,10 +78,13 @@ impl DynamicPtrTracker {
 
     pub fn remove_ptr(&mut self, ptr_name: *const c_char) {
         for ptr_value in self.ptr_values.iter_mut() {
+            if ptr_value.size == 0 { continue; }
             if ptr_value.name == ptr_name {
                 ptr_value.size = 0;
                 ptr_value.name = ptr::null();
                 self.ptr_count -= 1;
+
+                break;
             }
         }
     }
@@ -74,8 +93,12 @@ impl DynamicPtrTracker {
         self.ptr_values.iter().filter(|ptr_value| ptr_value.size != 0).count() as i8
     }
 
-    pub fn check(&mut self) {
-        self.data_leaks = self.get_number_unfreed_ptrs();
+    pub fn print_report(&mut self) {
+        // Remove shared memory pointer
+        self.data_leaks = self.get_number_unfreed_ptrs() - 1;
+        println!("------------------------Dynamic Analysis Report------------------------");
+        println!("strcpy bounds violated: {}", self.strcpy_bounds_violated);
+        println!("Data leaks: {}", self.data_leaks);
     }
 
 }
@@ -94,27 +117,13 @@ impl DynamicPtrTracker {
  *  - Maybe some rust functions need to extern "C" to be used in C
  */
 
-
-/*
-fn get_string_from_raw_ptr(ptr: *const c_char) -> String {
-     let c_str = unsafe {
-        CStr::from_ptr(ptr)
-    };
-    let buf: &[u8] = c_str.to_bytes();
-    let str_slice = std::str::from_utf8(buf).unwrap();
-    str_slice.to_owned()
-}
-*/
-
-
-// TODO: Implement write to shmem
+/// Write data to shared memory with id shmem_id
 pub fn write_to_shmem<T>(data: T, shm_key: i32) where T: Copy + Debug {
-    // Write data to shared memory with id shmem_id
     // Get the size of T
     let mem_size = std::mem::size_of::<T>() as libc::size_t;
     unsafe {
         // shmflg = 0 means shm already exists
-        let shmem_id = libc::shmget(shm_key, mem_size, 0o777 | IPC_CREAT);
+        let shmem_id = libc::shmget(shm_key, mem_size, 0o777 | libc::IPC_CREAT);
         let ptr = libc::shmat(shmem_id, ptr::null() as *const libc::c_void, 0) as *mut T;
         // println!("Write to shmem {:?}", ptr);
         if ptr.is_null() || (ptr as isize) == -1 {
@@ -125,6 +134,7 @@ pub fn write_to_shmem<T>(data: T, shm_key: i32) where T: Copy + Debug {
     }
 }
 
+/// Write data to a new shared memory with key key
 pub fn write_to_new_shmem<T>(data: T, key: i32) -> i32 where T: Copy + Debug {
     let mem_size = std::mem::size_of::<T>() as libc::size_t;
     let shm_id = unsafe { libc::shmget(key, mem_size, libc::IPC_CREAT | libc::IPC_EXCL | 0o777) };
@@ -147,16 +157,13 @@ pub fn write_to_new_shmem<T>(data: T, key: i32) -> i32 where T: Copy + Debug {
 }
 
 
-// TODO: Return a value on error instead of panic
+/// Read data from shared memory with key shm_key
 pub fn read_from_shmem<T>(shm_key: i32) -> T where T: Copy + Debug {
     let mem_size = std::mem::size_of::<T>() as libc::size_t;
-    // println!("Read shmid");
     let shmem_id = unsafe {
-        libc::shmget(shm_key, mem_size, 0o777 | IPC_CREAT)
+        libc::shmget(shm_key, mem_size, 0o777 | libc::IPC_CREAT)
     };
-    // println!("Start read");
     let ptr = unsafe { libc::shmat(shmem_id,ptr::null() as *const libc::c_void, 0) } as *mut T;
-    // println!("Read from shmem {:?}", ptr);
     if ptr.is_null() || (ptr as isize) == -1 {
         panic!("Failed to attach to shmem on read");
     }
@@ -164,13 +171,12 @@ pub fn read_from_shmem<T>(shm_key: i32) -> T where T: Copy + Debug {
     // println!("Data {:?}", data);
     unsafe {
         libc::shmdt(ptr as *const libc::c_void);
-        // println!("shmdt Data");
         libc::shmctl(shmem_id, libc::IPC_RMID, ptr::null_mut());
-        // println!("shmctl Data");
     }
     data
 }
 
+/// Detach shared memory with key shm_key
 pub fn detach_shmem(shm_key: i32) {
     let mem_size = 0;
     let shmem_id = unsafe {
@@ -187,9 +193,9 @@ pub fn detach_shmem(shm_key: i32) {
  *  - free
  *  - strcpy
  *  ? calloc
+ *  ? memcpy
  *  ? realloc
  *  ? strcat
- *  ? memcpy
  *  ? memmove
  *  ? memset
  *  ? scanf
@@ -198,31 +204,29 @@ pub fn detach_shmem(shm_key: i32) {
 
 
 #[no_mangle]
+/// Intercept malloc calls
 pub unsafe extern "C" fn malloc_intercept(size: i32, ptr: *mut libc::c_void) {
-    let shm_key= 43;
+    let shm_key= 42;
     let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
-    // TODO: Check if shmem already open to avoid recursive malloc calls
-    // Or open shmem at the beginning of C program and write at the end
-    // But with this we need to add a new argument (pointer to TestStruct)
     tst_struct.add_ptr(ptr as *const c_char, size);
 
     write_to_shmem(tst_struct, shm_key);
 }
 
 #[no_mangle]
+/// Intercept free calls
 pub unsafe extern "C" fn free_intercept(_ptr: *mut libc::c_void) {
-    let shm_key = 43;
+    let shm_key = 42;
     let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
-    // tst_struct.frees += 1;
-
     tst_struct.remove_ptr(_ptr as *const c_char);
 
     write_to_shmem(tst_struct, shm_key);
 }
 
 #[no_mangle]
+/// Intercept strcpy calls
 pub unsafe extern "C" fn strcpy_intercept(dest: *mut libc::c_char, src: *const libc::c_char) -> i32 {
-    let shm_key = 43;
+    let shm_key = 42;
     let mut tst_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
 
     let dest_size = libc::strlen(dest);

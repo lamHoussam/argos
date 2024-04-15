@@ -14,7 +14,7 @@ char* strcpy(char* dest, const char* src) {
         real_strcpy = dlsym(RTLD_NEXT, "strcpy");
     }
 
-    printf("Intercepted strcpy\n");
+    printf("[::ROS::] Intercepted strcpy\n");
     int stat = strcpy_intercept(dest, src);
     char* p = NULL;
     if (stat == 1)
@@ -40,7 +40,7 @@ void free(void* ptr) {
         real_free = dlsym(RTLD_NEXT,"free");
     }
 
-    printf("Free called\n");
+    printf("[::ROS::] Free called\n");
     free_intercept(ptr);
     real_free(ptr);
 }
