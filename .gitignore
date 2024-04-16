@@ -1,3 +1,7 @@
+# TODO: Better .gitignore
+
 /target
 a.exe
-./test/main
+test/dynamic_demo
+test/static_demo
+test/main

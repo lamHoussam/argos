@@ -50,7 +50,7 @@ impl CodeParser {
         match srce.get_display_name() {
             Some(var_name) => {
                 let var_srce = self.variables.get(&var_name).expect("Variable not declared");
-                replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), args[1].get_display_name().unwrap(), var_dest.size);
+                replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), args[1].get_display_name().unwrap(), var_dest.size - 1);
                 found_buff_overflow = var_srce.size >= var_dest.size;
             },
             None => {
@@ -86,7 +86,8 @@ impl CodeParser {
         for cap in re.captures_iter(&format) {
             let buffer_size = match cap.get(1) {
                 Some(matched) => matched.as_str().parse::<usize>().unwrap_or(0),
-                None => 0,
+                // TODO: Manage this case
+                None => usize::MAX,
             };
 
             println!("Found: {}, size: {}", &cap[0], buffer_size);
@@ -95,7 +96,7 @@ impl CodeParser {
                     let var_name = value.get_display_name().unwrap();
                     let var = self.variables.get(&var_name).expect("Variable not declared!");
                     if var.size >= buffer_size { 
-                        replacement = format!("scanf({}, %{}s)", var_name, buffer_size);
+                        replacement = format!("scanf(%{}s, {})", buffer_size - 1, var_name);
                         found_vuln = true; 
                     }
                     // println!("Goes with {}, size: {}", var_name, );
@@ -135,7 +136,7 @@ impl CodeParser {
                         let size = size_str.parse::<usize>().unwrap_or_default();
 
                         // TODO: Multiply size by sizeof(type_name)
-                        println!("name: {:?}, size: {:?}, type: {:?}", type_name, size, type_name);
+                        println!("name: {:?}, size: {:?}, type: {:?}", entity.get_name(), size, type_name);
                         self.add_new_variable(entity.get_name()
                             .unwrap_or("Variable".to_string()), size);
                     },
@@ -173,13 +174,14 @@ impl CodeParser {
                 let range = entity.get_range().unwrap();
                 // println!("Function call: {}, range: {:?}", display_name, range);
                 
+                // TODO: Use pattern matching
                 if let Some(args) = entity.get_arguments() {
                     if display_name == "strcpy" {
                         self.parse_strcpy(&args, range);
                     } else if display_name == "strcat" {
                         self.parse_strcpy(&args, range);
                     } else if display_name == "scanf" {
-                        let found_buff_overflow = self.parse_scanf(&args, range);
+                        self.parse_scanf(&args, range);
                     }
                 }
                 // println!("Function call: {}", display_name);

@@ -21,7 +21,7 @@ struct Args {
     file_path: String,
 }
 
-// TODO: Performance test
+// TODO: Performance test: Add Timer
 
 fn main() {
     let args = Args::parse();
@@ -30,10 +30,9 @@ fn main() {
         let clng = Clang::new().unwrap();
         let index = Index::new(&clng, false, false);
         let tu = index.parser(args.file_path.clone()).parse().expect("File not found");
-        let file_content = std::fs::read_to_string(&args.file_path).expect("File not found");
+        // let file_content = std::fs::read_to_string(&args.file_path).expect("File not found");
 
-        let c: Vec<u8> = file_content.bytes().collect();
-        println!("File content: {:?}", c.get(148));
+        println!("-------------------STARTING STATIC MODE-------------------");
 
         let mut parser = CodeParser::new();
         for entity in tu.get_entity().get_children() {
@@ -52,7 +51,7 @@ fn main() {
         println!("Target binary: {:?}", target_binary);
         let library_path = std::env::current_dir().unwrap().join("src/libintercept.so");
         println!(">>> Loading library: {:?}", library_path);
-        println!(">>> Starting binary: {:?}", library_path);
+        println!(">>> Starting binary");
 
         let result_output = std::process::Command::new(target_binary)
             .env("LD_PRELOAD", library_path)
@@ -66,7 +65,7 @@ fn main() {
             },
         };
 
-        println!("Output: {}", String::from_utf8(output.stdout).unwrap());
+        println!("Output: {}", String::from_utf8(output.stdout).unwrap_or(String::from("Output is not UTF-8")));
 
         let mut test_struct = read_from_shmem::<DynamicPtrTracker>(shm_key);
         detach_shmem(shm_key);
