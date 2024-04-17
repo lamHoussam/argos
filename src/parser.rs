@@ -44,23 +44,22 @@ impl CodeParser {
         let bytes_offset_start = function_range.get_start();
         let bytes_offset_end = function_range.get_end();
 
-        let mut found_buff_overflow = false;
-        let mut replacement = String::new();
-
-        match srce.get_display_name() {
+        let replacement;
+        
+        let found_buff_overflow = match srce.get_display_name() {
             Some(var_name) => {
                 let var_srce = self.variables.get(&var_name).expect("Variable not declared");
                 replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), args[1].get_display_name().unwrap(), var_dest.size - 1);
-                found_buff_overflow = var_srce.size >= var_dest.size;
+                var_srce.size >= var_dest.size
             },
             None => {
                 let value = get_litteral(srce);
                 // println!("Litteral: {}", value);
                 replacement = format!("strncpy({}, {}, {})", args[0].get_display_name().unwrap(), value, var_dest.size);
                 let size = value.len() - 2;
-                found_buff_overflow = size >= var_dest.size;
+                size >= var_dest.size
             },
-        }
+        };
 
         if found_buff_overflow {
             println!("Detected buffer overflow pattern at line {:?}", bytes_offset_start.get_file_location().line);
@@ -77,11 +76,13 @@ impl CodeParser {
         println!("Format: {}", format);
 
         let mut found_vuln = false;
-        let mut replacement = String::new();
 
         let re = regex::Regex::new(r"%(\d+)?s").unwrap();
         let mut arg_iter = args.iter();
         arg_iter.next();
+
+        let mut modified_format = String::new();
+        let mut last_end = 1;
 
         for cap in re.captures_iter(&format) {
             let buffer_size = match cap.get(1) {
@@ -90,14 +91,22 @@ impl CodeParser {
                 None => usize::MAX,
             };
 
-            println!("Found: {}, size: {}", &cap[0], buffer_size);
+            // println!("Found: {}, size: {}", &cap[0], buffer_size);
             match arg_iter.next() {
                 Some(value) => {
                     let var_name = value.get_display_name().unwrap();
                     let var = self.variables.get(&var_name).expect("Variable not declared!");
-                    if var.size >= buffer_size { 
-                        replacement = format!("scanf(%{}s, {})", buffer_size - 1, var_name);
-                        found_vuln = true; 
+                    if var.size < buffer_size { 
+                        let safe_format = format!("%{}s", var.size - 1);
+                        
+                        modified_format.push_str(&format[last_end..cap.get(0).unwrap().start()-1]);
+                        modified_format.push_str(&safe_format);
+                        last_end = cap.get(0).unwrap().end();
+
+                        found_vuln = true;
+                    } else {
+                        modified_format.push_str(&format[last_end..cap.get(0).unwrap().end()]);
+                        last_end = cap.get(0).unwrap().end();
                     }
                     // println!("Goes with {}, size: {}", var_name, );
                 },
@@ -109,11 +118,13 @@ impl CodeParser {
             let bytes_offset_start = range.get_start();
             let bytes_offset_end = range.get_end();
 
+            modified_format = format!("scanf(\"{}\", {})", modified_format, args[1].get_display_name().unwrap());
+
             println!("Detected buffer overflow at line {:?}", bytes_offset_start.get_file_location().line);
-            println!("\tReplace with: {}", replacement);
+            println!("\tReplace with: {:?}", modified_format);
             println!("\tReplace this range of bytes: {:?} -> {:?}", bytes_offset_start.get_file_location().offset, bytes_offset_end.get_file_location().offset);
         } else {
-            println!("WARNING: Use of unsafe function strcat");
+            println!("WARNING: Use of unsafe function scanf");
         }
         found_vuln
     }

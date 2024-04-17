@@ -53,6 +53,7 @@ impl DynamicPtrTracker {
         }
     }
     
+    /*
     pub fn get_ptr(&self, name: *const c_char) -> PtrValue {
         for ptr_value in self.ptr_values.iter() {
             if ptr_value.name == name {
@@ -61,6 +62,7 @@ impl DynamicPtrTracker {
         }
         PtrValue { size: 0, name: ptr::null() }
     }
+    */
 
     pub fn add_ptr(&mut self, ptr_name: *const c_char, ptr_size: i32) {
         for ptr_value in self.ptr_values.iter_mut() {

@@ -7,7 +7,7 @@ void static_parer_test() {
     char new_buf[16];
     char buf[8];
     strcpy(buf, "Really long text!");
-    scanf("%15s", new_buf);
+    scanf("This: %19s, %s", new_buf, buf);
     printf("%s\n", new_buf);
 }
 
