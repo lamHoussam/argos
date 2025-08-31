@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-clang -o test/static_demo test/static_demo.c
+clang -o test/static_demo -w test/static_demo.c
 clang -o test/dynamic_demo test/dynamic_demo.c
 
 cargo build --release
